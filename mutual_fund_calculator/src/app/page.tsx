@@ -9,14 +9,42 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { Input } from "~/components/ui/input";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { api } from "~/trpc/react";
+import { TrendingUp } from "lucide-react";
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
+
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
+import {
+  ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "~/components/ui/chart";
+
+const chartConfig = {
+  price: {
+    label: "Price",
+    color: "hsl(var(--chart-1))",
+  },
+} satisfies ChartConfig;
 
 const RISK_FREE_RATE = 4.53;
 
 const useBeta = (ticker) => {
-  return api.beta.getBeta.useQuery(
-    { ticker },
+  return api.beta.getBeta.useQuery({ ticker }, { enabled: !!ticker });
+};
+
+const useYahooTrendData = (ticker) => {
+  return api.trend.getTrendData.useQuery(
+    { ticker, range: "6mo", interval: "1d" },
     { enabled: !!ticker }
   );
 };
@@ -26,10 +54,26 @@ const Page = () => {
   const [initialInvestment, setInitialInvestment] = useState(0);
   const [timeHorizon, setTimeHorizon] = useState(0);
   const [futureValue, setFutureValue] = useState<number | null>(null);
+  const [trendData, setTrendData] = useState<any[]>([]);
 
-  // Fetch beta using the hook properly
+  // Fetch beta data
   const { data: betaData, isLoading: isBetaLoading, error: betaError } = useBeta(ticker);
   const beta = betaData?.data;
+
+  // Fetch trend data from Yahoo Finance
+  const {
+    data: yahooTrendData,
+    isLoading: isTrendLoading,
+    error: trendError,
+  } = useYahooTrendData(ticker);
+
+  // Update trend data when fetched
+  useEffect(() => {
+    if (yahooTrendData?.trend) {
+      setTrendData(yahooTrendData.trend);
+    }
+    console.log(trendData)
+  }, [yahooTrendData]);
 
   // Fetch market return rate
   const { data: marketReturnRateData, isLoading: isMarketLoading, error: marketError } =
@@ -60,6 +104,7 @@ const Page = () => {
   };
 
   return (
+    <div>
     <div className="flex flex-col items-center space-y-4 mt-8">
       <div className="flex flex-col items-start space-y-2 w-[300px]">
         <label className="block text-sm font-medium text-gray-700">Mutual Fund Ticker</label>
@@ -92,9 +137,7 @@ const Page = () => {
       </div>
 
       <div className="flex flex-col items-start space-y-2 w-[300px]">
-        <label className="block text-sm font-medium text-gray-700">
-          Initial Investment Amount
-        </label>
+        <label className="block text-sm font-medium text-gray-700">Initial Investment Amount</label>
         <Input
           type="number"
           placeholder="Initial Investment Amount"
@@ -122,6 +165,49 @@ const Page = () => {
           <h2 className="text-lg font-medium">Future Value: ${futureValue.toFixed(2)}</h2>
         </div>
       )}
+    </div>
+    <div className="m-8">
+    <Card>
+      <CardHeader>
+        <CardTitle>{ticker}</CardTitle>
+      </CardHeader>
+      <CardContent>
+      <ChartContainer config={chartConfig}>
+        <LineChart
+          accessibilityLayer
+          data={trendData}
+          margin={{ left: 12, right: 12 }}
+        >
+          <CartesianGrid vertical={false} strokeDasharray="3 3" />
+          <XAxis
+            dataKey="date"
+            tickLine={false}
+            axisLine={false}
+            tickMargin={8}
+            tickFormatter={(value) => String(value)}
+          />
+          <YAxis
+            tickLine={false}
+            axisLine={false}
+            tickMargin={8}
+            label={{ value: "Price ($)", angle: -90, position: "insideLeft" }}
+          />
+          <ChartTooltip
+              cursor={false}
+              content={<ChartTooltipContent hideLabel />}
+            />
+          <Line
+            type="natural"
+            dataKey="price"
+            stroke="#007bff"
+            strokeWidth={2}
+            dot={false}
+          />
+        </LineChart>
+        </ChartContainer>
+      </CardContent>
+    </Card>
+    </div>
     </div>
   );
 };
